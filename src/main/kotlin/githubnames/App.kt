@@ -4,7 +4,6 @@
 package githubnames
 
 import java.io.File
-import java.lang.Exception
 import java.net.HttpURLConnection
 import java.net.URL
 
@@ -21,15 +20,13 @@ fun main(args: Array<String>) {
 }
 
 fun getToken(args: Array<String>): String {
-    val token: String
-    val f = File(".github-oauth.token")
-    token = if (f.exists() && f.canRead() && f.readText() != "") {
-        f.readText()
+    val file = File(".github-oauth.token")
+    return if (file.exists() && file.canRead() && file.readText() != "") {
+        file.readText()
     } else if (args.size == 1) {
         args[0]
     } else
         throw RuntimeException("No token passed")
-    return token
 }
 
 fun sendGet(target: String, key: String) {
