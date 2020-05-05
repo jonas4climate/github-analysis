@@ -1,10 +1,9 @@
 package githubnames
 
 data class User(
-        val login: String,
-        val language: String
+        val login: String
 ) {
     override fun toString(): String {
-        return "User $login using $language"
+        return "User $login"
     }
 }

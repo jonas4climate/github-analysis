@@ -20,21 +20,9 @@ const val GITHUB = "https://api.github.com"
 
 fun main(args: Array<String>) {
     val token = getToken(args)
-    //val response: String = makeRequest("$GITHUB/users","GET", token)
-    val response = """{"login": "test", "language": "Java"}"""
-    val result: User? = Klaxon().parse<User>(response)
-    print(result)
-
-    /* Doesn't work
-    val gson = Gson()
-    val user: User = gson.fromJson("""{"login": "test", "language": "Java"}""", User::class.java)
-    print(user)
-    */
-
-
-
-    //println(response.contains("login"))
-    //println(response)
+    val response: String = makeRequest("GET", "/users", token)
+    val result: List<User>? = Klaxon().parseArray(response)
+    println(result)
 }
 
 fun getToken(args: Array<String>): String {
@@ -47,8 +35,8 @@ fun getToken(args: Array<String>): String {
         throw RuntimeException("No token passed")
 }
 
-fun makeRequest(target: String, type: String, key: String, verbose: Boolean = false): String {
-    val url = URL(target)
+fun makeRequest(type: String, target: String, key: String, verbose: Boolean = false): String {
+    val url = URL(GITHUB + target)
 
     with(url.openConnection() as HttpURLConnection) {
         requestMethod = type
