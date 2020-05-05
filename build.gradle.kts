@@ -13,9 +13,10 @@ plugins {
 }
 
 repositories {
-    // Use jcenter for resolving dependencies.
+    // Use jkcenter for resolving dependencies.
     // You can declare any Maven/Ivy/file repository here.
     jcenter()
+    maven("https://jitpack.io")
 }
 
 dependencies {
@@ -30,6 +31,11 @@ dependencies {
 
     // Use the Kotlin JUnit integration.
     testImplementation("org.jetbrains.kotlin:kotlin-test-junit")
+
+    //implementation("com.google.code.gson:gson:2.8.6")
+
+    // Klaxon JSON parser
+    implementation("com.beust:klaxon:5.2")
 }
 
 application {

@@ -3,6 +3,8 @@
  */
 package githubnames
 
+import com.beust.klaxon.Klaxon
+import java.io.BufferedReader
 import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
@@ -14,9 +16,25 @@ class App {
         }
 }
 
+const val GITHUB = "https://api.github.com"
+
 fun main(args: Array<String>) {
     val token = getToken(args)
-    sendGet("https://api.github.com/users/j0ner0n/repos", token)
+    //val response: String = makeRequest("$GITHUB/users","GET", token)
+    val response = """{"login": "test", "language": "Java"}"""
+    val result: User? = Klaxon().parse<User>(response)
+    print(result)
+
+    /* Doesn't work
+    val gson = Gson()
+    val user: User = gson.fromJson("""{"login": "test", "language": "Java"}""", User::class.java)
+    print(user)
+    */
+
+
+
+    //println(response.contains("login"))
+    //println(response)
 }
 
 fun getToken(args: Array<String>): String {
@@ -29,22 +47,22 @@ fun getToken(args: Array<String>): String {
         throw RuntimeException("No token passed")
 }
 
-fun sendGet(target: String, key: String) {
+fun makeRequest(target: String, type: String, key: String, verbose: Boolean = false): String {
     val url = URL(target)
 
     with(url.openConnection() as HttpURLConnection) {
-        requestMethod = "GET"
+        requestMethod = type
         setRequestProperty("Authorization", "token: $key")
 
         if (responseCode != 200)
             throw RuntimeException("HTTP $requestMethod returned code $responseCode.")
-        else
-            println("\n$requestMethod: $url")
 
-        inputStream.bufferedReader().use {
-            it.lines().forEach { line ->
-                println(line)
-            }
+        if (verbose) {
+            println("\n$requestMethod: $url")
+            println("Requests left: ${headerFields["X-RateLimit-Remaining"]}")
+            //println("Entire Header: $headerFields")
         }
+
+        return inputStream.bufferedReader().use(BufferedReader::readText)
     }
 }
