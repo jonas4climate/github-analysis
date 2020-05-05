@@ -20,9 +20,15 @@ const val GITHUB = "https://api.github.com"
 
 fun main(args: Array<String>) {
     val token = getToken(args)
-    val response: String = makeRequest("GET", "/users", token)
-    val result: List<User>? = Klaxon().parseArray(response)
-    println(result)
+    var answer: String = makeRequest("GET", "/users", token, true)
+    val users: List<User> = Klaxon().parseArray(answer) ?: throw RuntimeException("Could not fetch users")
+    println(users)
+    /* TODO add for final solution
+    users.forEach {
+        answer = makeRequest("GET", "/users/${it.login}/repos", token, false)
+    }*/
+    answer = makeRequest("GET", "/users/${users[0].login}/repos", token, false)
+    println(answer)
 }
 
 fun getToken(args: Array<String>): String {
@@ -35,12 +41,13 @@ fun getToken(args: Array<String>): String {
         throw RuntimeException("No token passed")
 }
 
-fun makeRequest(type: String, target: String, key: String, verbose: Boolean = false): String {
+fun makeRequest(type: String, target: String, token: String, verbose: Boolean = false): String {
     val url = URL(GITHUB + target)
 
     with(url.openConnection() as HttpURLConnection) {
         requestMethod = type
-        setRequestProperty("Authorization", "token: $key")
+
+        setRequestProperty("Authorization", "token $token")
 
         if (responseCode != 200)
             throw RuntimeException("HTTP $requestMethod returned code $responseCode.")
