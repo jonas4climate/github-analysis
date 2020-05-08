@@ -40,5 +40,5 @@ dependencies {
 
 application {
     // Define the main class for the application.
-    mainClassName = "githubnames.AppKt"
+    mainClassName = "githubnames.ClassNameAnalysisKt"
 }

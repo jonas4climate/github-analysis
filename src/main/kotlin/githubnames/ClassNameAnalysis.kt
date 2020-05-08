@@ -19,22 +19,16 @@ val klaxon = Klaxon()
 fun main(args: Array<String>) {
     val token = getToken(args)
     var answer: String = makeRequest("GET", "/users", token, true)
-    println("test0000$answer")
     val users: List<User> = klaxon.parseArray(answer) ?: throw RuntimeException("Could not fetch users")
-    println("test0001$users")
 
     // TODO final
     /*users.forEach {
         answer = makeRequest("GET", "/users/${it.login}/repos", token, false)
     }*/
     // TODO temp
-    answer = makeRequest("GET", "/users/${users[0].login}/repos", token, false)
-    //println("test0002$answer")
+    answer = makeRequest("GET", "/users/${users[0].login}/repos", token, true)
 
     val repos: List<Repo> = klaxon.parseArray(answer) ?: throw RuntimeException("Could not fetch repos")
-    println("test0003$repos")
-
-
 }
 
 fun makeRequest(type: String, target: String, token: String, verbose: Boolean = false): String {
@@ -44,11 +38,18 @@ fun makeRequest(type: String, target: String, token: String, verbose: Boolean = 
         requestMethod = type
         setRequestProperty("Authorization", "token $token")
 
-        assert(responseCode != 200) { print("HTTP request $requestMethod returned code $responseCode") }
+        if (responseCode != 200) {
+            if (responseCode == 401)
+                throw RuntimeException("Please ensure a valid API token is passed")
+            else
+                throw RuntimeException("HTTP request $requestMethod returned code $responseCode")
+        }
+        assert(responseCode != 401) { print("Please ensure your a valid API token is passed") }
+        assert(responseCode == 200) { print("HTTP request $requestMethod returned code $responseCode") }
 
         val requestsLeft = headerFields["X-RateLimit-Remaining"].toString().removeSurrounding("[", "]").toLong()
 
-        if (requestsLeft < 4800) { //TODO compare == 0
+        if (requestsLeft < 1) { //TODO compare == 0
             val resetTime = headerFields["X-RateLimit-Reset"].toString().removeSurrounding("[", "]").toLong()
             // System returned time is not reliable enough but one minute room for error prevents making requests
             val timeToReset = resetTime - (System.currentTimeMillis() / 1000) + 60
