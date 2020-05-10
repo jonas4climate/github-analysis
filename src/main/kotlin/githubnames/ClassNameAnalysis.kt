@@ -19,12 +19,12 @@ val klaxon = Klaxon()
 
 fun main(args: Array<String>) {
     val token = getToken(args)
-    var userCount = 0
+    var lastUserId = 0
 
     do {
-        var response = makeRequest("GET", "$GITHUB_API/users?since=$userCount", token, true)
+        var response = makeRequest("GET", "$GITHUB_API/users?since=$lastUserId", token, true)
         val userResponses: List<UserResponse> = klaxon.parseArray(response) ?: throw RuntimeException("Could not fetch users")
-        userCount = userResponses.last().id
+        lastUserId = userResponses.last().id
 
         userResponses.forEach { user ->
             response = makeRequest("GET", "$GITHUB_API/users/${user.login}/repos", token, true)
