@@ -13,43 +13,53 @@ class App {
         }
 }
 
-const val GITHUB = "https://api.github.com"
+const val GITHUB_API = "https://api.github.com"
+const val GITHUB = "https://github.com"
 val klaxon = Klaxon()
 
 fun main(args: Array<String>) {
     val token = getToken(args)
-    var answer: String = makeRequest("GET", "/users", token, true)
-    val users: List<User> = klaxon.parseArray(answer) ?: throw RuntimeException("Could not fetch users")
 
-    // TODO final
-    /*users.forEach {
-        answer = makeRequest("GET", "/users/${it.login}/repos", token, false)
-    }*/
-    // TODO temp
-    answer = makeRequest("GET", "/users/${users[0].login}/repos", token, true)
+    var response = makeRequest("GET", "$GITHUB_API/users", token, true)
+    val userResponses: List<UserResponse> = klaxon.parseArray(response) ?: throw RuntimeException("Could not fetch users")
 
-    val repos: List<Repo> = klaxon.parseArray(answer) ?: throw RuntimeException("Could not fetch repos")
+    userResponses.forEach { user ->
+        response = makeRequest("GET", "$GITHUB_API/users/${user.login}/repos", token, true)
+        val repoResponses: List<RepoResponse> = klaxon.parseArray(response) ?: throw RuntimeException("Could not fetch repos")
+        val javaRepos = repoResponses.filter { it.language == "Java" }
+
+        /* INFO: Download instead of API calls
+        javaRepos.forEach {repo ->
+            // Download repo instead of making many API calls to reduce time waiting for responses and increase speed by performing operations locally
+            val command = "git clone $GITHUB/${user.login}/${repo.name} temp/${repo.name}"
+            println(command)
+            Runtime.getRuntime().exec(command)
+        }*/
+
+        javaRepos.forEach {repo ->
+            response = makeRequest("GET", "$GITHUB_API/repos/${user.login}/${repo.name}/git/trees/master?recursive=true", token, true)
+            response = response.substring(response.indexOf('['), response.indexOf(']')+1)
+            val elements: List<ElementResponse>? = klaxon.parseArray(response)
+            println(elements)
+        }
+    }
 }
 
 fun makeRequest(type: String, target: String, token: String, verbose: Boolean = false): String {
-    val url = URL(GITHUB + target)
+    val url = URL(target)
 
     with(url.openConnection() as HttpURLConnection) {
         requestMethod = type
         setRequestProperty("Authorization", "token $token")
 
-        if (responseCode != 200) {
-            if (responseCode == 401)
-                throw RuntimeException("Please ensure a valid API token is passed")
-            else
-                throw RuntimeException("HTTP request $requestMethod returned code $responseCode")
-        }
-        assert(responseCode != 401) { print("Please ensure your a valid API token is passed") }
-        assert(responseCode == 200) { print("HTTP request $requestMethod returned code $responseCode") }
+        if (responseCode == 401)
+            throw RuntimeException("Please ensure a valid API token is passed")
+        else if (responseCode != 200)
+            throw RuntimeException("HTTP request $requestMethod returned code $responseCode")
 
         val requestsLeft = headerFields["X-RateLimit-Remaining"].toString().removeSurrounding("[", "]").toLong()
 
-        if (requestsLeft < 1) { //TODO compare == 0
+        if (requestsLeft < 1) {
             val resetTime = headerFields["X-RateLimit-Reset"].toString().removeSurrounding("[", "]").toLong()
             // System returned time is not reliable enough but one minute room for error prevents making requests
             val timeToReset = resetTime - (System.currentTimeMillis() / 1000) + 60
@@ -57,16 +67,10 @@ fun makeRequest(type: String, target: String, token: String, verbose: Boolean = 
             Thread.sleep(1000*timeToReset)
         }
 
-        val answer = inputStream.bufferedReader().use(BufferedReader::readText)
+        if (verbose)
+            println("$requestMethod: $url, $requestsLeft API calls left")
 
-        if (verbose) {
-            println("\n$requestMethod: $url")
-            //println("Requests left: ${headerFields["X-RateLimit-Remaining"]}")
-            //println("Entire Header: $headerFields")
-            //println(answer)
-        }
-
-        return answer
+        return inputStream.bufferedReader().use(BufferedReader::readText)
     }
 }
 
