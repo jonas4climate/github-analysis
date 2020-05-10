@@ -19,30 +19,33 @@ val klaxon = Klaxon()
 
 fun main(args: Array<String>) {
     val token = getToken(args)
+    var userCount = 0
 
-    var response = makeRequest("GET", "$GITHUB_API/users", token, true)
-    val userResponses: List<UserResponse> = klaxon.parseArray(response) ?: throw RuntimeException("Could not fetch users")
+    do {
+        var response = makeRequest("GET", "$GITHUB_API/users?since=$userCount", token, true)
+        val userResponses: List<UserResponse> = klaxon.parseArray(response) ?: throw RuntimeException("Could not fetch users")
+        userCount = userResponses.last().id
 
-    userResponses.forEach { user ->
-        response = makeRequest("GET", "$GITHUB_API/users/${user.login}/repos", token, true)
-        val repoResponses: List<RepoResponse> = klaxon.parseArray(response) ?: throw RuntimeException("Could not fetch repos")
-        val javaRepos = repoResponses.filter { it.language == "Java" }
+        userResponses.forEach { user ->
+            response = makeRequest("GET", "$GITHUB_API/users/${user.login}/repos", token, true)
+            val repoResponses: List<RepoResponse> = klaxon.parseArray(response) ?: throw RuntimeException("Could not fetch repos")
+            val javaRepos = repoResponses.filter { it.language == "Java" }
 
-        /* INFO: Download instead of API calls
-        javaRepos.forEach {repo ->
-            // Download repo instead of making many API calls to reduce time waiting for responses and increase speed by performing operations locally
-            val command = "git clone $GITHUB/${user.login}/${repo.name} temp/${repo.name}"
-            println(command)
-            Runtime.getRuntime().exec(command)
-        }*/
+            /* INFO: Download instead of API calls
+            javaRepos.forEach {repo ->
+                // Download repo instead of making many API calls to reduce time waiting for responses and increase speed by performing operations locally
+                val command = "git clone $GITHUB/${user.login}/${repo.name} temp/${repo.name}"
+                println(command)
+                Runtime.getRuntime().exec(command)
+            }*/
 
-        javaRepos.forEach {repo ->
-            response = makeRequest("GET", "$GITHUB_API/repos/${user.login}/${repo.name}/git/trees/master?recursive=true", token, true)
-            response = response.substring(response.indexOf('['), response.indexOf(']')+1)
-            val elements: List<ElementResponse>? = klaxon.parseArray(response)
-            println(elements)
+            javaRepos.forEach {repo ->
+                response = makeRequest("GET", "$GITHUB_API/repos/${user.login}/${repo.name}/git/trees/master?recursive=true", token, true)
+                response = response.substring(response.indexOf('['), response.indexOf(']')+1)
+                val elements: List<ElementResponse>? = klaxon.parseArray(response)
+            }
         }
-    }
+    } while (userResponses.isNotEmpty())
 }
 
 fun makeRequest(type: String, target: String, token: String, verbose: Boolean = false): String {
