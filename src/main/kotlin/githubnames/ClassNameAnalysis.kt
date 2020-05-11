@@ -7,13 +7,6 @@ import java.net.HttpURLConnection
 import java.net.URL
 import kotlin.collections.HashMap
 
-class App {
-    val greeting: String
-        get() {
-            return "Hello world."
-        }
-}
-
 const val GITHUB_API = "https://api.github.com"
 //const val GITHUB = "https://github.com" // INFO: use when git pulling repos instead
 val classNameCounts = HashMap<String, Int>(1_000_000)
@@ -21,13 +14,15 @@ val klaxon = Klaxon()
 
 fun main(args: Array<String>) {
     val token = getToken(args)
-    analyze(token, 250, 280, true)
+    analyze(token, true, 0, 30)
 }
 
-fun analyze(token: String, startID: Int = 0, endID: Int = Int.MAX_VALUE, verbose: Boolean) {
+fun analyze(token: String, verbose: Boolean, startID: Int = 0, endID: Int = Int.MAX_VALUE) {
     var lastUserId = startID
     do {
-        var url = "$GITHUB_API/users?since=$lastUserId"
+        // May not be exact if IDs in given fetch are not existing anymore due to account deletions
+        val entries = minOf(100, endID - lastUserId)
+        var url = "$GITHUB_API/users?since=$lastUserId&per_page=$entries"
         var response = makeHTTPRequest("GET", url, token, verbose) ?: throw RuntimeException("Request failed with 404 error")
         val users: List<User> = klaxon.parseArray(response) ?: throw RuntimeException("Could not fetch users")
         lastUserId = users.last().id
@@ -49,9 +44,9 @@ fun analyze(token: String, startID: Int = 0, endID: Int = Int.MAX_VALUE, verbose
             javaRepos.forEach java@ { javaRepo ->
                 url = "$GITHUB_API/repos/${user.login}/${javaRepo.name}/git/trees/master?recursive=true"
                 response = makeHTTPRequest("GET", url, token, verbose) ?: return@java
-                response = response.substring(response.indexOf('['), response.lastIndexOf(']') + 1)
+                val tree = response.substring(response.indexOf('['), response.lastIndexOf(']') + 1)
 
-                val treeElements: List<TreeElement>? = klaxon.parseArray(response)
+                val treeElements: List<TreeElement>? = klaxon.parseArray(tree)
                         ?: throw RuntimeException("Could not fetch git tree elements")
                 val files = treeElements?.filter { it.type == "blob" }
 
@@ -71,8 +66,11 @@ fun analyze(token: String, startID: Int = 0, endID: Int = Int.MAX_VALUE, verbose
         }
         //printSortedStatus(classNameCounts)
     } while (users.isNotEmpty() && lastUserId < endID)
-    // Write to file as toString (TODO: CSV)
-    File("results.txt").writeText(classNameCounts.toList().sortedByDescending { (_, value) -> value }.toString())
+
+    // Write results sorted to csv file
+    val out = File("results.csv")
+    val sortedList = classNameCounts.toList().sortedByDescending { (_, value) -> value }
+    sortedList.forEach { (name, n) -> out.appendText("$name, $n\n")}
 }
 
 fun printSortedStatus(classNameCounts: HashMap<String, Int>) {
