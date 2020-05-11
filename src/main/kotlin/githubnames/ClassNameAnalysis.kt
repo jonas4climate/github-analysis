@@ -5,6 +5,7 @@ import java.io.BufferedReader
 import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
+import kotlin.collections.HashMap
 
 class App {
     val greeting: String
@@ -14,41 +15,63 @@ class App {
 }
 
 const val GITHUB_API = "https://api.github.com"
-const val GITHUB = "https://github.com"
+//const val GITHUB = "https://github.com"
+val classNameCounts = HashMap<String, Int>(1000000)
 val klaxon = Klaxon()
 
 fun main(args: Array<String>) {
     val token = getToken(args)
+
     var lastUserId = 0
-
     do {
-        var response = makeRequest("GET", "$GITHUB_API/users?since=$lastUserId", token, true)
-        val userResponses: List<UserResponse> = klaxon.parseArray(response) ?: throw RuntimeException("Could not fetch users")
-        lastUserId = userResponses.last().id
+        var response = makeHTTPRequest("GET", "$GITHUB_API/users?since=$lastUserId", token, true)
+        val users: List<User> = klaxon.parseArray(response) ?: throw RuntimeException("Could not fetch users")
+        lastUserId = users.last().id
 
-        userResponses.forEach { user ->
-            response = makeRequest("GET", "$GITHUB_API/users/${user.login}/repos", token, true)
-            val repoResponses: List<RepoResponse> = klaxon.parseArray(response) ?: throw RuntimeException("Could not fetch repos")
-            val javaRepos = repoResponses.filter { it.language == "Java" }
+        users.forEach { user ->
+            response = makeHTTPRequest("GET", "$GITHUB_API/users/${user.login}/repos", token, true)
 
-            /* INFO: Download instead of API calls
+            val repos: List<Repo> = klaxon.parseArray(response) ?: throw RuntimeException("Could not fetch repos")
+            val javaRepos = repos.filter { it.language == "Java" }
+
+            /* INFO: Alternative concept: Download repository instead of API calls
             javaRepos.forEach {repo ->
                 // Download repo instead of making many API calls to reduce time waiting for responses and increase speed by performing operations locally
-                val command = "git clone $GITHUB/${user.login}/${repo.name} temp/${repo.name}"
+                val command = "git clone --depth 1 $GITHUB/${user.login}/${repo.name} temp/${repo.name}"
                 println(command)
                 Runtime.getRuntime().exec(command)
             }*/
 
-            javaRepos.forEach {repo ->
-                response = makeRequest("GET", "$GITHUB_API/repos/${user.login}/${repo.name}/git/trees/master?recursive=true", token, true)
-                response = response.substring(response.indexOf('['), response.indexOf(']')+1)
-                val elements: List<ElementResponse>? = klaxon.parseArray(response)
+            javaRepos.forEach { javaRepo ->
+                response = makeHTTPRequest("GET", "$GITHUB_API/repos/${user.login}/${javaRepo.name}/git/trees/master?recursive=true", token, true)
+                response = response.substring(response.indexOf('['), response.lastIndexOf(']') + 1)
+
+                val treeElements: List<TreeElement>? = klaxon.parseArray(response) ?: throw RuntimeException("Could not fetch git tree elements")
+                val files = treeElements?.filter { it.type == "blob" }
+
+                files?.forEach { file ->
+                    // 6 is minimum size for file name of java file (e.g. x.java)
+                    if (file.path.length > 5 && file.path.takeLast(5) == ".java") {
+                        var className = file.path
+                        if ('/' in className)
+                            className = className.drop(className.lastIndexOf('/') + 1)
+                        // Remove extension and capitalize first letter
+                        // (some files may be written LowerCamelCase but code usually contains UpperCamelCase class names)
+                        className = className.dropLast(5).capitalize()
+                        classNameCounts[className] = classNameCounts.getOrDefault(className, 0) + 1
+                    }
+                }
             }
         }
-    } while (userResponses.isNotEmpty())
+
+        /*val significantSorted = classNameCounts.toList().sortedByDescending { (_, value) -> value }.take(20).toList()
+        println(significantSorted)*/
+    } while (users.isNotEmpty() && lastUserId < 1000)
+    // Write to file as toString (TODO: CSV)
+    File("results.txt").writeText(classNameCounts.toList().sortedByDescending { (_, value) -> value }.toString())
 }
 
-fun makeRequest(type: String, target: String, token: String, verbose: Boolean = false): String {
+fun makeHTTPRequest(type: String, target: String, token: String, verbose: Boolean = false): String {
     val url = URL(target)
 
     with(url.openConnection() as HttpURLConnection) {

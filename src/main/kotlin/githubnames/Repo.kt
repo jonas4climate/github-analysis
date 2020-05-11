@@ -1,6 +1,6 @@
 package githubnames
 
-data class RepoResponse(
+data class Repo(
         val name: String,
         val language: String?
 ) {

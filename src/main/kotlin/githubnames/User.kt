@@ -1,6 +1,6 @@
 package githubnames
 
-data class UserResponse(
+data class User(
         val id: Int,
         val login: String
 ) {

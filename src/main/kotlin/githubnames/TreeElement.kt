@@ -1,6 +1,6 @@
 package githubnames
 
-data class ElementResponse(
+data class TreeElement(
         val path: String,
         val type: String
 ) {
@@ -8,7 +8,7 @@ data class ElementResponse(
         return when(type) {
             "blob" -> "File: $path"
             "tree" -> "Folder: $path"
-            else -> path
+            else -> "TreeElement: $path"
         }
     }
 }
