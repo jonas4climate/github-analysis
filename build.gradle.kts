@@ -32,8 +32,6 @@ dependencies {
     // Use the Kotlin JUnit integration.
     testImplementation("org.jetbrains.kotlin:kotlin-test-junit")
 
-    //implementation("com.google.code.gson:gson:2.8.6")
-
     // Klaxon JSON parser
     implementation("com.beust:klaxon:5.2")
 }

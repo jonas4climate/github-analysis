@@ -95,14 +95,14 @@ fun analyze(token: String, verbose: Boolean, startID: Int = 0, endID: Int = Int.
  */
 fun exportToCSV(classNameCounts: HashMap<String, Int>, mostUsed: Int) {
     val out = File("results/all-names.csv").also { file -> file.parentFile.mkdirs() }
-    out.writeText("") // Reset file
+    out.writeText("class name, occurrences\n")
     val sortedList = classNameCounts.toList().sortedByDescending { (_, value) -> value }
     sortedList.forEach { (name, n) -> out.appendText("$name, $n\n")}
 
     val mostUsedList = sortedList.take(mostUsed)
     println(mostUsedList)
     val out2 = File("results/most-used.csv")
-    out2.writeText("")
+    out2.writeText("class name, occurrences\n")
     mostUsedList.forEach { (name, n) -> out2.appendText("$name, $n\n")}
 }
 
