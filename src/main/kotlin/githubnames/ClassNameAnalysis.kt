@@ -1,6 +1,7 @@
 package githubnames
 
 import com.beust.klaxon.Klaxon
+import com.beust.klaxon.KlaxonException
 import java.io.BufferedReader
 import java.io.File
 import java.net.HttpURLConnection
@@ -15,17 +16,6 @@ val klaxon = Klaxon()
 fun main() {
     val config: Config = readConfig()
     analyze(config.token, config.verbose, endID = config.endID, mostUsed = config.mostUsed)
-}
-
-fun readConfig(path: String = ".config.json"): Config {
-    val config = klaxon.parse<Config>(File(path)) ?: throw RuntimeException("Could not parse from config file")
-    when {
-        config.token == "" -> throw IllegalArgumentException("Ensure a token for the API is passed, otherwise it will not be functional")
-        config.startID < 0 || config.startID > Int.MAX_VALUE -> throw IllegalArgumentException("startID only allows positive Integer values")
-        config.endID < 1 || config.endID > Int.MAX_VALUE -> throw IllegalArgumentException("endID only allows positive non-zero Integer values")
-        config.mostUsed < 1 -> throw IllegalArgumentException("mostUsed only allows positive non-zero Integer values")
-    }
-    return config
 }
 
 /**
@@ -97,6 +87,12 @@ fun analyze(token: String, verbose: Boolean, startID: Int = 0, endID: Int = Int.
     }
 }
 
+/**
+ * Function exporting the entire list of class names with occurrences as CSV and an
+ * additional second file with just the specified number of most used class names
+ * @param classNameCounts Map mapping from class names to occurrences
+ * @param mostUsed number of items counted to the most used list for the second CSV file
+ */
 fun exportToCSV(classNameCounts: HashMap<String, Int>, mostUsed: Int) {
     val out = File("results/all-names.csv").also { file -> file.parentFile.mkdirs() }
     out.writeText("") // Reset file
@@ -110,11 +106,46 @@ fun exportToCSV(classNameCounts: HashMap<String, Int>, mostUsed: Int) {
     mostUsedList.forEach { (name, n) -> out2.appendText("$name, $n\n")}
 }
 
+/**
+ * @param path The path to the config JSON file
+ * @return Configuration settings
+ */
+fun readConfig(path: String = ".config.json"): Config {
+    try {
+        val config = klaxon.parse<Config>(File(path)) ?: throw RuntimeException("Could not parse from config file")
+        when {
+            config.token == "" ->
+                throw IllegalArgumentException("Ensure a token for the API is passed, otherwise it will not be functional")
+            config.startID < 0 || config.startID > Int.MAX_VALUE ->
+                throw IllegalArgumentException("startID only allows positive Integer values, for default set to 0")
+            config.endID < 1 || config.endID > Int.MAX_VALUE ->
+                throw IllegalArgumentException("endID only allows positive non-zero Integer values, for default set to 2^32 - 1")
+            config.mostUsed < 1 ->
+                throw IllegalArgumentException("mostUsed only allows positive non-zero Integer values")
+        }
+        return config
+    } catch (e: KlaxonException) {
+        throw IllegalArgumentException("The JSON vas invalid and parsing failed, please check the .config.json for completion. " +
+                "It requires all inputs of the githubnames.Config class")
+    }
+}
+
+/**
+ * Helper method to print a given number of most used classes during runtime of the analysis
+ * @param classNameCounts Map mapping class names to occurrences
+ * @param mostUsed number of most used class names to display
+ */
 fun printSortedStatus(classNameCounts: HashMap<String, Int>, mostUsed: Int) {
     println(classNameCounts.toList().sortedByDescending { (_, value) -> value }.take(mostUsed).toList())
 }
 
-
+/**
+ * Sending a HTTP method to the specified URL, authenticating with the token and returning the data received
+ * @param type HTTP method
+ * @param target URL to send packet to
+ * @param token GitHub API token for OAuth
+ * @param verbose Whether to print details during execution
+ */
 fun makeHTTPRequest(type: String, target: String, token: String, verbose: Boolean = false): String? {
     val url = URL(target)
 
