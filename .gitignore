@@ -2,8 +2,6 @@
 .gradle
 # Ignore Intellij IDEA config
 .idea
-# Ignore secret token
-.github-oauth.token
 
 # Ignore Gradle build output directory
 build

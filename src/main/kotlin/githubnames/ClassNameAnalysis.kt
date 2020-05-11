@@ -12,9 +12,20 @@ const val GITHUB_API = "https://api.github.com"
 val classNameCounts = HashMap<String, Int>(1_000_000)
 val klaxon = Klaxon()
 
-fun main(args: Array<String>) {
-    val token = getToken(args)
-    analyze(token, true, endID = 750, mostUsed = 50)
+fun main() {
+    val config: Config = readConfig()
+    analyze(config.token, config.verbose, endID = config.endID, mostUsed = config.mostUsed)
+}
+
+fun readConfig(path: String = ".config.json"): Config {
+    val config = klaxon.parse<Config>(File(path)) ?: throw RuntimeException("Could not parse from config file")
+    when {
+        config.token == "" -> throw IllegalArgumentException("Ensure a token for the API is passed, otherwise it will not be functional")
+        config.startID < 0 || config.startID > Int.MAX_VALUE -> throw IllegalArgumentException("startID only allows positive Integer values")
+        config.endID < 1 || config.endID > Int.MAX_VALUE -> throw IllegalArgumentException("endID only allows positive non-zero Integer values")
+        config.mostUsed < 1 -> throw IllegalArgumentException("mostUsed only allows positive non-zero Integer values")
+    }
+    return config
 }
 
 /**
@@ -112,8 +123,8 @@ fun makeHTTPRequest(type: String, target: String, token: String, verbose: Boolea
         setRequestProperty("Authorization", "token $token")
 
         when (responseCode) {
-            401 -> throw RuntimeException("Please ensure a valid API token is passed")
-            // Rarely happens when no master branch exists, TODO ignore for now
+            401 -> throw RuntimeException("Please ensure a valid API token is passed in the configuration file")
+            // INFO: Rarely happens when no master branch exists, ignoring these cases for now
             404 -> return null
             !in listOf(200) -> throw RuntimeException("HTTP request $requestMethod returned code $responseCode")
         }
@@ -133,14 +144,4 @@ fun makeHTTPRequest(type: String, target: String, token: String, verbose: Boolea
 
         return inputStream.bufferedReader().use(BufferedReader::readText)
     }
-}
-
-fun getToken(args: Array<String>): String {
-    val file = File(".github-oauth.token")
-    return if (file.exists() && file.canRead() && file.readText() != "") {
-        file.readText()
-    } else if (args.size == 1) {
-        args[0]
-    } else
-        ""
 }
