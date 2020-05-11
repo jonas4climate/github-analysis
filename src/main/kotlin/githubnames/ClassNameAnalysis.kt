@@ -15,38 +15,44 @@ class App {
 }
 
 const val GITHUB_API = "https://api.github.com"
-//const val GITHUB = "https://github.com"
-val classNameCounts = HashMap<String, Int>(1000000)
+//const val GITHUB = "https://github.com" // INFO: use when git pulling repos instead
+val classNameCounts = HashMap<String, Int>(1_000_000)
 val klaxon = Klaxon()
 
 fun main(args: Array<String>) {
     val token = getToken(args)
+    analyze(token, 250, 280, true)
+}
 
-    var lastUserId = 0
+fun analyze(token: String, startID: Int = 0, endID: Int = Int.MAX_VALUE, verbose: Boolean) {
+    var lastUserId = startID
     do {
-        var response = makeHTTPRequest("GET", "$GITHUB_API/users?since=$lastUserId", token, true)
+        var url = "$GITHUB_API/users?since=$lastUserId"
+        var response = makeHTTPRequest("GET", url, token, verbose) ?: throw RuntimeException("Request failed with 404 error")
         val users: List<User> = klaxon.parseArray(response) ?: throw RuntimeException("Could not fetch users")
         lastUserId = users.last().id
 
         users.forEach { user ->
-            response = makeHTTPRequest("GET", "$GITHUB_API/users/${user.login}/repos", token, true)
+            url = "$GITHUB_API/users/${user.login}/repos"
+            response = makeHTTPRequest("GET", url, token, verbose) ?: throw RuntimeException("Request failed with 404 error")
 
             val repos: List<Repo> = klaxon.parseArray(response) ?: throw RuntimeException("Could not fetch repos")
             val javaRepos = repos.filter { it.language == "Java" }
 
-            /* INFO: Alternative concept: Download repository instead of API calls
+            /* INFO: Alternative concept: Download repository instead of making API calls, faster if parsing files for class names
             javaRepos.forEach {repo ->
                 // Download repo instead of making many API calls to reduce time waiting for responses and increase speed by performing operations locally
                 val command = "git clone --depth 1 $GITHUB/${user.login}/${repo.name} temp/${repo.name}"
-                println(command)
                 Runtime.getRuntime().exec(command)
             }*/
 
-            javaRepos.forEach { javaRepo ->
-                response = makeHTTPRequest("GET", "$GITHUB_API/repos/${user.login}/${javaRepo.name}/git/trees/master?recursive=true", token, true)
+            javaRepos.forEach java@ { javaRepo ->
+                url = "$GITHUB_API/repos/${user.login}/${javaRepo.name}/git/trees/master?recursive=true"
+                response = makeHTTPRequest("GET", url, token, verbose) ?: return@java
                 response = response.substring(response.indexOf('['), response.lastIndexOf(']') + 1)
 
-                val treeElements: List<TreeElement>? = klaxon.parseArray(response) ?: throw RuntimeException("Could not fetch git tree elements")
+                val treeElements: List<TreeElement>? = klaxon.parseArray(response)
+                        ?: throw RuntimeException("Could not fetch git tree elements")
                 val files = treeElements?.filter { it.type == "blob" }
 
                 files?.forEach { file ->
@@ -63,31 +69,36 @@ fun main(args: Array<String>) {
                 }
             }
         }
-
-        /*val significantSorted = classNameCounts.toList().sortedByDescending { (_, value) -> value }.take(20).toList()
-        println(significantSorted)*/
-    } while (users.isNotEmpty() && lastUserId < 1000)
+        //printSortedStatus(classNameCounts)
+    } while (users.isNotEmpty() && lastUserId < endID)
     // Write to file as toString (TODO: CSV)
     File("results.txt").writeText(classNameCounts.toList().sortedByDescending { (_, value) -> value }.toString())
 }
 
-fun makeHTTPRequest(type: String, target: String, token: String, verbose: Boolean = false): String {
+fun printSortedStatus(classNameCounts: HashMap<String, Int>) {
+    println(classNameCounts.toList().sortedByDescending { (_, value) -> value }.take(20).toList())
+}
+
+
+fun makeHTTPRequest(type: String, target: String, token: String, verbose: Boolean = false): String? {
     val url = URL(target)
 
     with(url.openConnection() as HttpURLConnection) {
         requestMethod = type
         setRequestProperty("Authorization", "token $token")
 
-        if (responseCode == 401)
-            throw RuntimeException("Please ensure a valid API token is passed")
-        else if (responseCode != 200)
-            throw RuntimeException("HTTP request $requestMethod returned code $responseCode")
+        when (responseCode) {
+            401 -> throw RuntimeException("Please ensure a valid API token is passed")
+            // Rarely happens when no master branch exists, TODO ignore for now
+            404 -> return null
+            !in listOf(200) -> throw RuntimeException("HTTP request $requestMethod returned code $responseCode")
+        }
 
         val requestsLeft = headerFields["X-RateLimit-Remaining"].toString().removeSurrounding("[", "]").toLong()
 
         if (requestsLeft < 1) {
             val resetTime = headerFields["X-RateLimit-Reset"].toString().removeSurrounding("[", "]").toLong()
-            // System returned time is not reliable enough but one minute room for error prevents making requests
+            // System returned time is not reliable enough so one minute additional margin prevents making requests too early
             val timeToReset = resetTime - (System.currentTimeMillis() / 1000) + 60
             println("Depleted API limit, waiting ${timeToReset}s")
             Thread.sleep(1000*timeToReset)
