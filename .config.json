@@ -2,6 +2,6 @@
   "token": "",
   "verbose": true,
   "startID": 0,
-  "endID": 1000,
+  "endID": 1000000000,
   "mostUsed": 20
 }
